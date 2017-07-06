@@ -1,0 +1,91 @@
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
+import scipy
+from scipy import stats
+from itertools import product
+%matplotlib inline
+#pu1 sequence
+motif_sequences_df = pd.read_csv('/home/jtao/for_shengnan/pu1_motif_sequences.tsv', sep='\t', header=None)
+motif_sequences_df.columns = ['ID','Sequence']
+motif_sequences_df.index = motif_sequences_df['ID'].values
+del motif_sequences_df['ID']
+#count k-mers, 4^k= columns, 41511 rows 
+def count_kmers(df,k):
+    #create a empty datafrom for k-mers count
+    ID=list(product('ACGT', repeat=k))
+    ID=[("%s"*len(x)%x).strip() for x in ID]
+    count_frame=np.zeros((df.shape[0],4**k),dtype=np.int)#a dataframe to store future data
+    count_frame=pd.DataFrame(count_frame, columns=ID)
+    count_frame.index=df.index.values
+    #
+    for i in range (df.shape[0]):
+        kmers = []
+        string = df.ix[i,0]
+        string = str(string)
+        n = len(string)
+        for j in range(0,n-k+1):
+            kmers.append(string[j:j+k])
+            dict={}
+            for twomers in kmers:
+                if twomers in dict:
+                    dict[twomers]=dict[twomers]+1
+                else:
+                    dict[twomers]=1
+            Sequence_counts_df=pd.DataFrame(dict, index=[df.index.values[i],])
+        count_frame.ix[i,:]=Sequence_counts_df.ix[0,:]
+    count_frame.fillna(0, inplace=True)
+    return count_frame
+two=count_kmers(motif_sequences_df,2)
+three=count_kmers(motif_sequences_df,3)
+four=count_kmers(motif_sequences_df,4)
+five=count_kmers(motif_sequences_df,5)
+six=count_kmers(motif_sequences_df,6)
+seven=count_kmers(motif_sequences_df,7)
+eight=count_kmers(motif_sequences_df,8)
+def find_correlation(df):
+    '''
+    input: a dataframe contains all kmer counts
+    output: a dataframe contains correlation coefficient of each kmer pair
+    '''
+
+    kmers = df.columns.values
+    correlation_df=np.zeros((df.shape[1],df.shape[1]),dtype=np.float)
+    correlation_df=pd.DataFrame(correlation_df, columns=kmers)
+    correlation_df.index=kmers
+    for i in range(df.shape[1]-1):
+        for j in range(i+1,df.shape[1]):
+            kmer_paris=df.iloc[:,[i,j]]#select two kmers
+            #remove data that two kmers do not co-occur
+            kmer_paris=kmer_paris[kmer_paris.ix[:,0]!=0]
+            kmer_paris=kmer_paris[kmer_paris.ix[:,1]!=0]
+            #calculate correlation
+            coef=np.corrcoef(kmer_paris.ix[:,0],kmer_paris.ix[:,1])
+            correlation_df.ix[i,j]=coef[0,1]
+    #reshape dataframe
+    Pairs=[]
+    Correlation=[]
+    #loop in part of count data that contain meaningful correlation
+    for i in range (correlation_df.shape[1]-1):
+        for j in range (i+1,correlation_df.shape[1]):
+            #put motif pair and correlation into the empty list
+            kmer_pairs=(kmers[i],kmers[j])
+            Pairs.append(kmer_pairs)
+            Correlation.append(correlation_df.ix[i,j])
+    #reshape the dataframe
+    reshaped_df=pd.DataFrame({'Correlation': Correlation}, index=Pairs)
+    reshaped_df.fillna(0, inplace=True)
+    return reshaped_df
+correlation_two=find_correlation(two)
+sns.distplot(correlation_two['Correlation'])
+plt.ylabel('Frequency')
+plt.xlabel('2mer Correlation')
+plt.title('PU1') 
+plt.show()
+twomers_count=two.sum(axis=0)
+sns.distplot(twomers_count)
+plt.ylabel('Frequency')
+plt.xlabel('2mer')
+plt.title('PU1') 
+plt.show()
